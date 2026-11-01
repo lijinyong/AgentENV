@@ -2128,7 +2128,7 @@ paths:
 
     delete:
       summary: Kill sandbox
-      description: Kill a sandbox
+      description: Kill a sandbox. When fencingToken is supplied, deletion is rejected with 409 if the sandbox carries a different control-plane fencing token.
       tags: [sandboxes]
       security:
         - ApiKeyAuth: []
@@ -2138,11 +2138,21 @@ paths:
           AdminTeamAuth: []
       parameters:
         - $ref: "#/components/parameters/sandboxID"
+        - name: fencingToken
+          in: query
+          required: false
+          description: Expected control-plane fencing token stored in sandbox metadata. Omit for legacy unconditional deletion.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 64
       responses:
         "204":
           description: The sandbox was killed successfully
         "404":
           $ref: "#/components/responses/404"
+        "409":
+          $ref: "#/components/responses/409"
         "401":
           $ref: "#/components/responses/401"
         "500":

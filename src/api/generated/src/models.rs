@@ -136,6 +136,16 @@ pub struct SandboxesSandboxIdDeletePathParams {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
 #[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
+pub struct SandboxesSandboxIdDeleteQueryParams {
+    /// Expected control-plane fencing token stored in sandbox metadata.
+    #[serde(rename = "fencingToken")]
+    #[validate(length(min = 1, max = 64))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fencing_token: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, validator::Validate)]
+#[cfg_attr(feature = "conversion", derive(frunk::LabelledGeneric))]
 pub struct SandboxesSandboxIdForkPostPathParams {
     pub sandbox_id: String,
 }

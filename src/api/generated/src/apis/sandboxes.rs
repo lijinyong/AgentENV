@@ -138,6 +138,8 @@ pub enum SandboxesSandboxIdDeleteResponse {
     Status204_TheSandboxWasKilledSuccessfully,
     /// Not found
     Status404_NotFound(models::Error),
+    /// Conflict
+    Status409_Conflict(models::Error),
     /// Authentication error
     Status401_AuthenticationError(models::Error),
     /// Server error
@@ -465,6 +467,7 @@ pub trait Sandboxes<E: std::fmt::Debug + Send + Sync + 'static = ()>:
         cookies: &CookieJar,
         claims: &Self::Claims,
         path_params: &models::SandboxesSandboxIdDeletePathParams,
+        query_params: &models::SandboxesSandboxIdDeleteQueryParams,
     ) -> Result<SandboxesSandboxIdDeleteResponse, E>;
 
     /// Fork sandbox.

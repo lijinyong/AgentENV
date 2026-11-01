@@ -39,6 +39,14 @@ fn sandbox_not_found(id: impl Into<String>) -> models::Error {
     ApiImpl::error(404, format!("sandbox {} not found", id.into()))
 }
 
+fn fencing_token_allows_delete(actual: Option<&str>, expected: Option<&str>) -> bool {
+    match (actual, expected) {
+        // Legacy sandboxes have no control-plane token metadata.
+        (None, _) | (_, None) => true,
+        (Some(actual), Some(expected)) => actual == expected,
+    }
+}
+
 /// Find the [`HookStatusError`] in an orchestrator error chain, present when
 /// the failure was a non-2xx response from the custom extension.
 fn hook_status_error(err: &OrchestratorError) -> Option<&HookStatusError> {
@@ -1551,6 +1559,7 @@ impl Sandboxes<()> for ApiImpl {
         _cookies: &CookieJar,
         _claims: &Self::Claims,
         path_params: &models::SandboxesSandboxIdDeletePathParams,
+        query_params: &models::SandboxesSandboxIdDeleteQueryParams,
     ) -> Result<SandboxesSandboxIdDeleteResponse, ()> {
         let path_id = &path_params.sandbox_id;
         let Ok(sandbox_id) = SandboxId::parse_str(path_id) else {
@@ -1558,6 +1567,31 @@ impl Sandboxes<()> for ApiImpl {
                 sandbox_not_found(path_id),
             ));
         };
+        if let Some(expected) = query_params.fencing_token.as_deref() {
+            let metadata = match self.orchestrator.get_sandbox(&sandbox_id).await {
+                Ok(Some(metadata)) => metadata,
+                Ok(None) => {
+                    return Ok(SandboxesSandboxIdDeleteResponse::Status404_NotFound(
+                        sandbox_not_found(path_id),
+                    ))
+                }
+                Err(err) => {
+                    return Ok(SandboxesSandboxIdDeleteResponse::Status500_ServerError(
+                        err.into(),
+                    ))
+                }
+            };
+            let actual = metadata
+                .user_metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("control_plane_fencing_token"))
+                .map(String::as_str);
+            if !fencing_token_allows_delete(actual, Some(expected)) {
+                return Ok(SandboxesSandboxIdDeleteResponse::Status409_Conflict(
+                    Self::error(409, "sandbox fencing token mismatch"),
+                ));
+            }
+        }
         match self.orchestrator.delete_sandbox(sandbox_id).await {
             Ok(_) => {
                 Ok(SandboxesSandboxIdDeleteResponse::Status204_TheSandboxWasKilledSuccessfully)
@@ -2313,6 +2347,14 @@ mod tests {
     use super::*;
     use crate::orchestrator::SandboxOperation;
     use crate::sandbox::SandboxCaptureError;
+
+    #[test]
+    fn fencing_token_allows_delete_only_without_conflict() {
+        assert!(fencing_token_allows_delete(None, Some("7")));
+        assert!(fencing_token_allows_delete(Some("7"), None));
+        assert!(fencing_token_allows_delete(Some("7"), Some("7")));
+        assert!(!fencing_token_allows_delete(Some("7"), Some("8")));
+    }
 
     #[test]
     fn hook_status_error_found_in_direct_anyhow_chain() {
